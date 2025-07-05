@@ -158,29 +158,78 @@ class DecoderLayer(nn.Module):
         output = self.norm3(norm2_output + self.dropout(feedforward_output))
         return output
     
-      
+class Transformer(nn.Module):
+    def __init__(
+        self, 
+        src_vocab_size: int,
+        tgt_vocab_size: int,
+        d_model: int,
+        num_heads: int,
+        num_layers: int,
+        d_ff: int,
+        seq_len: int,
+        dropout: float=0.5
+        ) -> None:
+        super().__init__()
+        self.encoder_embedding = InputEmbeddings(src_vocab_size, d_model)
+        self.decoder_embedding = InputEmbeddings(tgt_vocab_size, d_model)
+        self.positional_encoding = PositionalEncoding(d_model, seq_len)
+        
+        self.encoder_layers = nn.ModuleList([EncoderLayer(d_model, d_ff, num_heads, dropout) for _ in range(num_layers)])
+        self.decoder_layers = nn.ModuleList([DecoderLayer(d_model, d_ff, num_heads, dropout) for _ in range(num_layers)])
+        
+        self.fc = nn.Linear(in_features=d_model, out_features=tgt_vocab_size)
+        self.dropout = nn.Dropout(dropout)
+    
+    def generate_mask(self, src, tgt):
+        src_mask = (src != 0).unsqueeze(1).unsqueeze(2)
+        tgt_mask = (tgt != 0).unsqueeze(1).unsqueeze(3)
+        seq_length = tgt.size(1)
+        nopeak_mask = (1 - torch.triu(torch.ones(1, seq_length, seq_length), diagonal=1)).bool()
+        tgt_mask = tgt_mask & nopeak_mask
+        return src_mask, tgt_mask
+    
+    def forward(self, src, tgt):
+        src_masked, tgt_masked = self.generate_mask(src, tgt)
+        
+        src_embedded = self.dropout(self.positional_encoding(self.encoder_embedding(src)))
+        tgt_embedded = self.dropout(self.positional_encoding(self.decoder_embedding(tgt)))
+        
+        enc_output = src_embedded
+        for enc_layer in self.encoder_layers:
+            enc_output = enc_layer(enc_output, src_masked)
+            
+        dec_output = tgt_embedded
+        for dec_layer in self.decoder_layers:
+            dec_output = dec_layer(dec_output, enc_output, src_masked, tgt_masked)
+            
+        output = self.fc(dec_output)
+        return output
 
-vocab_size = 50
-d_model = 512
-q = torch.randn(vocab_size, d_model).unsqueeze(0)
-k = torch.randn(vocab_size, d_model).unsqueeze(0)
-v = torch.randn(vocab_size, d_model).unsqueeze(0)
-# print(q.shape) # [batch_size, seq_len, d_model]
-batch_size, seq_len, d_model = q.size()
-q = q.view(batch_size, seq_len, 4, 128)
-k = k.view(k.size(0), k.size(1), 4, 128)
-# print(q.shape)
-q = q.transpose(1, 2)
-k = k.transpose(1, 2)
-# print(q.shape)
-# print(k.shape)
-o = torch.matmul(q, k.transpose(-2, -1))
-print(o.shape)
-o = torch.matmul(o, v)
-print(o.shape)
-# x = o.transpose(1, 2).contiguous().view(batch_size, seq_len, d_model)
-# print(x.shape)
-# print(k.transpose(-2, -1).shape)
+
+
+# if __name__ == "__main__":
+#     # vocab_size = 50
+#     # d_model = 512
+#     # q = torch.randn(vocab_size, d_model).unsqueeze(0)
+#     # k = torch.randn(vocab_size, d_model).unsqueeze(0)
+#     # v = torch.randn(vocab_size, d_model).unsqueeze(0)
+#     # # print(q.shape) # [batch_size, seq_len, d_model]
+#     # batch_size, seq_len, d_model = q.size()
+#     # q = q.view(batch_size, seq_len, 4, 128)
+#     # k = k.view(k.size(0), k.size(1), 4, 128)
+#     # # print(q.shape)
+#     # q = q.transpose(1, 2)
+#     # k = k.transpose(1, 2)
+#     # # print(q.shape)
+#     # # print(k.shape)
+#     # o = torch.matmul(q, k.transpose(-2, -1))
+#     # print(o.shape)
+#     # o = torch.matmul(o, v)
+#     # print(o.shape)
+#     # # x = o.transpose(1, 2).contiguous().view(batch_size, seq_len, d_model)
+#     # # print(x.shape)
+#     # # print(k.transpose(-2, -1).shape)
 
 
 
