@@ -130,6 +130,34 @@ class EncoderLayer(nn.Module):
         output = self.norm2(norm1_output + self.dropout(feedforward_output)) # Residual connection after FF
         return output
     
+class DecoderLayer(nn.Module):
+    def __init__(self, d_model: int, d_ff: int, num_heads: int, dropout: float=0.5):
+        super().__init__()
+        self.self_atten = MultiHeadAttention(d_model, num_heads)
+        self.cross_atten = MultiHeadAttention(d_model, num_heads)
+        self.norm1 = LayerNormalization(d_model)
+        self.norm2 = LayerNormalization(d_model)
+        self.norm3 = LayerNormalization(d_model)
+        self.feed_forward = PositionWiseFeedForward(d_model, d_ff)
+        self.dropout = nn.Dropout(dropout)
+    
+    # x -> self_atten -> norm -> cross_atten -> norm -> feedforward -> norm
+    def forward(self, x, enc_output, src_mask, tgt_mask):
+        """The Decoder Layer
+        Args:
+            x: The input to decoder to self atten
+            enc_output: The input to the decoder from encoder to cross atten
+            src_mask: Source mask to ignore certain parts of the encoder's output.
+            tgt_mask: Target mask to ignore certain parts of the decoder's input.
+        """
+        self_atten_output = self.self_atten(x, x, x, tgt_mask)
+        norm1_output = self.norm1(x + self.dropout(self_atten_output))
+        cross_atten_output = self.cross_atten(norm1_output, enc_output, enc_output, src_mask)
+        norm2_output = self.norm2(norm1_output + self.dropout(cross_atten_output))
+        feedforward_output = self.feed_forward(norm2_output)
+        output = self.norm3(norm2_output + self.dropout(feedforward_output))
+        return output
+    
       
 
 vocab_size = 50
