@@ -112,7 +112,23 @@ class LayerNormalization(nn.Module):
         return self.alpha * (x - mean) / (std + self.eps) + self.bias
         
 
+class EncoderLayer(nn.Module):
+    def __init__(self, d_model: int, d_ff: int, num_heads: int, dropout: float=0.5):
+        super().__init__()
+        self.atten = MultiHeadAttention(d_model, num_heads)
+        self.norm1 = LayerNormalization(d_model)
+        self.norm2 = LayerNormalization(d_model)
+        self.feed_forward = PositionWiseFeedForward(d_model, d_ff)
+        self.dropout = nn.Dropout(dropout)
     
+    # x -> mulitheadatten -> norm -> feedforward -> norm
+    def forward(self, x, mask):
+        atten_output = self.atten(x, x, x, mask)
+        norm1_output = self.norm1(x + self.dropout(atten_output)) # Residual connection after attention
+        feedforward_output = self.feed_forward(norm1_output)
+        # after first norm, we pass the it to the next norm NOT the input x
+        output = self.norm2(norm1_output + self.dropout(feedforward_output)) # Residual connection after FF
+        return output
     
       
 
